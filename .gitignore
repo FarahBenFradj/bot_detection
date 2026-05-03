@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+
+# Data (VERY IMPORTANT)
+data/
+
+# Models (VERY IMPORTANT)
+models/
+*.h5
+*.pkl
+
+# Results / outputs
+results/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

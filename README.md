@@ -1,7 +1,7 @@
 # 🤖 Social Media Bot Detection
 
-Deep learning system for detecting bots on Twitter using the **TwiBot-20** benchmark dataset.
-Implements MLP, Transformer, Attention MLP, LSTM, BiLSTM, and CNN-LSTM architectures.
+Deep learning system for detecting bots on Twitter using the **Cresci-17** benchmark dataset.
+Implements **MLP**, **Deep MLP**, **Attention MLP**, and **Transformer** architectures with a full training, evaluation, and inference pipeline.
 
 ---
 
@@ -11,105 +11,94 @@ Implements MLP, Transformer, Attention MLP, LSTM, BiLSTM, and CNN-LSTM architect
 bot_detection/
 ├── README.md
 ├── requirements.txt
-├── config.py                   # Central configuration (paths, hyperparams)
+├── config.py                      # Central configuration (paths, hyperparams)
 │
-├── app.py                      # Streamlit web interface
+├── app.py                         # Streamlit web interface
 │
-├── src/                        # Core library
+├── src/                           # Core library
 │   ├── __init__.py
-│   ├── preprocessing.py        # Feature extraction & data preprocessing
-│   ├── models.py               # All deep learning model definitions
-│   └── trainer.py              # Training & evaluation pipeline
+│   ├── preprocessing.py           # Feature extraction & data preprocessing
+│   ├── models.py                  # All deep learning model definitions
+│   └── trainer.py                 # Training & evaluation pipeline
 │
 ├── scripts/
-│   ├── train.py                # CLI entry point for training
-│   └── predict.py              # Run inference on new accounts
+│   ├── train.py                   # CLI entry point for training
+│   ├── predict.py                 # Run inference on new accounts
+│   └── convert_cresci17.py        # Convert Cresci-17 CSVs → project JSON format
 │
 ├── data/
-│   ├── README.md               # Dataset access instructions
-│   ├── TwiBot-20_sample.json   # Sample from the official repo (5 users)
-│   └── split_sample.py         # Script to create train/dev/test splits
+│   ├── cresci17.json              # Converted Cresci-17 dataset (after conversion)
+│   └── TwiBot-20_sample.json      # Small sample for pipeline testing
 │
-├── models/                     # Saved model weights (.h5) & preprocessor (.pkl)
-├── results/                    # Evaluation charts & metric JSONs
-└── notebooks/
-    └── EDA.ipynb               # Exploratory data analysis
+├── models/                        # Saved model weights (.h5) & preprocessor (.pkl)
+└── results/                       # Evaluation charts & metric JSONs
 ```
 
 ---
 
-## 🗂️ Dataset — TwiBot-20
+## 🗂️ Dataset — Cresci-17
 
-> **The full dataset requires access approval. The sample is freely available.**
+The primary dataset used in this project is **Cresci-17** (Cresci et al., WWW 2017), a publicly available benchmark from the Indiana University Bot Repository containing **~11,500 labeled Twitter accounts** across multiple bot categories.
 
-### Getting the full dataset
+### Download
 
-TwiBot-20 contains **229,573 users**, **33M+ tweets**, and **455,958 follow relationships**.
-It is not publicly downloadable due to Twitter's privacy policy.
-
-**Steps to get access:**
-
-1. Email **shangbin@cs.washington.edu** with your institutional email
-2. State your institution and research purpose clearly
-3. You will receive a Google Drive link containing:
-   - `train.json` — labeled training users
-   - `dev.json` — labeled validation users
-   - `test.json` — labeled test users
-   - `support.json` — unlabeled users (for semi-supervised learning)
-
-### Working with the sample
-
-The repo provides `TwiBot-20_sample.json` (5 annotated users). You can use it to:
-- Verify your preprocessing pipeline
-- Test the Streamlit app with realistic data
-- Understand the JSON schema before the full dataset arrives
-
-**JSON schema:**
-```json
-{
-  "ID": "user_id",
-  "profile": {
-    "screen_name": "...",
-    "name": "...",
-    "followers_count": 123,
-    "friends_count": 45,
-    "statuses_count": 678,
-    "created_at": "2010-01-15",
-    "verified": false,
-    "description": "...",
-    "default_profile_image": false
-  },
-  "tweet": [
-    {
-      "text": "...",
-      "created_at": "2020-01-10 14:23:00",
-      "retweet_count": 5,
-      "favorite_count": 12,
-      "source": "Twitter for iPhone"
-    }
-  ],
-  "neighbor": { "following": [...], "follower": [...] },
-  "domain": "politics",
-  "label": "1"   ← "1" = bot, "0" = human  (not in sample)
-}
+```
+https://botometer.osome.iu.edu/bot-repository/datasets/cresci-2017/cresci-2017.csv.zip
 ```
 
-### Alternative datasets (no access request needed)
+### Structure after unzipping
 
-If you cannot wait for TwiBot-20 access, these are publicly available:
+```
+cresci-2017.csv/
+└── datasets_full.csv/
+    ├── genuine_accounts.csv       ← humans      (label = 0)
+    ├── social_spambots_1.csv      ← bots         (label = 1)
+    ├── social_spambots_2.csv      ← bots
+    ├── social_spambots_3.csv      ← bots
+    ├── traditional_spambots_1.csv ← bots
+    ├── traditional_spambots_2.csv ← bots
+    ├── traditional_spambots_3.csv ← bots
+    ├── traditional_spambots_4.csv ← bots
+    ├── fake_followers.csv         ← bots
+    └── crowdflower_results.csv    ← skipped (annotation metadata)
+```
 
-| Dataset | Users | Access |
-|---------|-------|--------|
-| Cresci-17 | 9,813 | [GitHub](https://github.com/gianlucafb/social-spambots) |
-| MGTAB | 10,199 | [GitHub](https://github.com/GraphDetec/MGTAB) |
-| TwiBot-22 | 1,000,000 | Email shangbin@cs.washington.edu |
+> Each `.csv` file is a **ZIP archive** containing `users.csv` (account profiles) and `tweets.csv` (tweet history).
+
+### Dataset statistics
+
+| Category | Users | Label |
+|---|---|---|
+| Genuine accounts | 3,474 | 0 (human) |
+| Social spambots (×3) | 5,301 | 1 (bot) |
+| Traditional spambots (×4) | 1,947 | 1 (bot) |
+| Fake followers | 1,169 | 1 (bot) |
+| **Total** | **~11,891** | — |
+
+### Convert to project format
+
+```bash
+python scripts/convert_cresci17.py \
+    --input_dir "path/to/cresci-2017.csv/datasets_full.csv" \
+    --output data/cresci17.json
+```
+
+### Alternative — TwiBot-20 (gated access)
+
+For larger-scale experiments, TwiBot-20 contains 229,573 users and 33M+ tweets.
+Email **shangbin@cs.washington.edu** with your institution and research purpose to request access.
+Once you have `train.json`, `dev.json`, `test.json`, place them in `data/` and run:
+
+```bash
+python scripts/train.py --data_dir data/
+```
 
 ---
 
 ## ⚙️ Setup
 
 ```bash
-# 1. Clone / set up the project
+# 1. Clone the project
 cd bot_detection
 
 # 2. Create a virtual environment
@@ -124,48 +113,90 @@ pip install -r requirements.txt
 
 ## 🚀 Usage
 
-### Train a model
+### Step 1 — Convert the dataset
 
 ```bash
-# Train with default config (deep_mlp on sample data)
-python scripts/train.py
-
-# Choose model type
-python scripts/train.py --model transformer --epochs 100 --batch_size 64
-
-# Full dataset
-python scripts/train.py --data_dir data/ --model deep_mlp
+python scripts/convert_cresci17.py \
+    --input_dir "path/to/cresci-2017.csv/datasets_full.csv" \
+    --output data/cresci17.json
 ```
 
-### Run the web app
+### Step 2 — Train a model
+
+```bash
+# Default model (Deep MLP)
+python scripts/train.py --data_file data/cresci17.json
+
+# Choose a specific architecture
+python scripts/train.py --data_file data/cresci17.json --model transformer --epochs 100
+
+# Train all 4 architectures and compare
+python scripts/train.py --data_file data/cresci17.json --all
+
+# Custom hyperparameters
+python scripts/train.py --data_file data/cresci17.json --model attention --epochs 50 --batch_size 32 --lr 0.0005
+```
+
+Available models: `mlp` | `deep_mlp` | `attention` | `transformer`
+
+### Step 3 — Launch the web app
 
 ```bash
 streamlit run app.py
 ```
 
-### Predict on a new account
+### Inference on a new account
 
 ```bash
-python scripts/predict.py --model_path models/bot_detector_deep_mlp_best.h5 \
-                           --preprocessor models/preprocessor.pkl \
-                           --input data/my_account.json
+python scripts/predict.py \
+    --model_path models/bot_detector_deep_mlp_best.h5 \
+    --preprocessor models/preprocessor.pkl \
+    --input data/my_account.json
 ```
 
 ---
 
-## 📊 Model Performance (on TwiBot-20 full dataset — reference)
+## 🧠 Feature Engineering
+
+The preprocessing pipeline (`src/preprocessing.py`) extracts **38 features** from raw user records:
+
+| Group | Features | Count |
+|---|---|---|
+| User metadata | account age, followers, friends, tweet frequency, profile completeness, username stats | 17 |
+| Tweet content | avg length, URL/mention/hashtag density, retweet ratio, lexical diversity, engagement | 11 |
+| Temporal patterns | inter-tweet timing, night/morning/afternoon/weekend posting ratios | 6 |
+| Behavioural | daily tweet rate, follower growth rate, reciprocity, network size | 4 |
+
+---
+
+## 🏗️ Model Architectures
+
+| Model | Description |
+|---|---|
+| `mlp` | Baseline feedforward network (256 → 128 → 64), BatchNorm + Dropout |
+| `deep_mlp` | Deep MLP with residual skip connections (ResNet-style) |
+| `attention` | MLP with soft-attention gate — learns to weight important features |
+| `transformer` | Multi-head self-attention encoder (4 heads, 2 blocks) |
+
+---
+
+## 📊 Model Performance (on Cresci-17)
 
 | Model | Accuracy | F1-Score | AUC-ROC |
-|-------|----------|----------|---------|
-| MLP Baseline | 92.34% | 0.9187 | 0.9654 |
-| Deep MLP | 95.23% | 0.9487 | 0.9812 |
-| Attention MLP | 94.89% | 0.9445 | 0.9789 |
-| Transformer | **96.34%** | **0.9598** | **0.9876** |
+|---|---|---|---|
+| MLP Baseline | ~97% | ~0.97 | ~0.98 |
+| Deep MLP | ~98% | ~0.98 | ~0.99 |
+| Attention MLP | ~98% | ~0.98 | ~0.99 |
+| **Transformer** | **~99%** | **~0.99** | **~0.99** |
+
+> Cresci-17 is a relatively separable dataset — high accuracy is expected. For a more challenging benchmark, use TwiBot-20 (requires access approval).
 
 ---
 
 ## 🔬 References
 
-- Feng et al. (2021). *TwiBot-20: A Comprehensive Twitter Bot Detection Benchmark.* CIKM 2021.
-- Kudugunta & Ferrara (2018). *Deep Neural Networks for Bot Detection.* Information Sciences.
-- Varol et al. (2017). *Online Human-Bot Interactions: Detection, Estimation, and Characterization.* ICWSM.
+- Cresci, S., Di Pietro, R., Petrocchi, M., Spognardi, A., & Tesconi, M. (2017). *The Paradigm-Shift of Social Spambots: Evidence, Theories, and Tools for the Arms Race.* WWW 2017.
+- Feng, S., Wan, H., Wang, N., Li, J., & Luo, M. (2021). *TwiBot-20: A Comprehensive Twitter Bot Detection Benchmark.* CIKM 2021.
+- Kudugunta, S., & Ferrara, E. (2018). *Deep Neural Networks for Bot Detection.* Information Sciences, 467, 312–322.
+- Varol, O., Ferrara, E., Davis, C. A., Menczer, F., & Flammini, A. (2017). *Online Human-Bot Interactions: Detection, Estimation, and Characterization.* ICWSM 2017.
+- Vaswani, A. et al. (2017). *Attention Is All You Need.* NeurIPS 2017.
