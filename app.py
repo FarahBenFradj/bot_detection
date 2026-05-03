@@ -288,12 +288,7 @@ with tab1:
         else:
             st.warning("No sample data found. Commit data/sample_accounts.json to your repo.")
 
-    ptype = st.session_state.get("prefill_type", "")
-    pname = st.session_state.get("prefill_name", "")
-    if ptype == "human" and pname:
-        st.success(f"✅ Loaded a **Human** account from dataset: @{pname}")
-    elif ptype == "bot" and pname:
-        st.error(f"⚠️ Loaded a **Bot** account from dataset: @{pname}")
+
 
     # ── Form ──────────────────────────────────────────────────────────────────
     with st.form("account_form"):
