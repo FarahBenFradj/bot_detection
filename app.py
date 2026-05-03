@@ -263,78 +263,74 @@ with tab1:
 
     humans, bots = load_sample_data()
 
+    # ── Seed session state defaults (only on first load) ──────────────────────
+    _DEFAULTS = {
+        "f_username": "testuser", "f_followers": 100, "f_following": 200,
+        "f_tweets": 500, "f_verified": False, "f_default_img": True,
+        "f_description": "", "f_has_url": False, "f_has_location": False,
+        "f_created": datetime(2018, 1, 1),
+    }
+    for k, v in _DEFAULTS.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+    def _apply_profile(user: dict, label_type: str):
+        """Write a user profile into session state so the form picks it up."""
+        p = user.get("profile", {})
+        st.session_state["f_username"]    = p.get("screen_name", "")
+        st.session_state["f_followers"]   = int(p.get("followers_count", 0))
+        st.session_state["f_following"]   = int(p.get("friends_count", 0))
+        st.session_state["f_tweets"]      = int(p.get("statuses_count", 0))
+        st.session_state["f_verified"]    = bool(p.get("verified", False))
+        st.session_state["f_default_img"] = bool(p.get("default_profile_image", False))
+        st.session_state["f_description"] = p.get("description", "") or ""
+        st.session_state["f_has_url"]     = bool(p.get("url", ""))
+        st.session_state["f_has_location"]= bool(p.get("location", ""))
+        st.session_state["prefill_type"]  = label_type
+        st.session_state["prefill_name"]  = p.get("screen_name", "")
+        created = datetime(2018, 1, 1)
+        raw = p.get("created_at", "")
+        for fmt in ("%a %b %d %H:%M:%S +0000 %Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+            try: created = datetime.strptime(raw, fmt); break
+            except (ValueError, TypeError): continue
+        st.session_state["f_created"] = created
+
     st.markdown("**Quick fill from dataset:**")
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 4])
 
     with col_btn1:
-        gen_human = st.button("👤 Random Human", use_container_width=True)
+        if st.button("👤 Random Human", use_container_width=True) and humans:
+            _apply_profile(random.choice(humans), "human")
+            st.rerun()
     with col_btn2:
-        gen_bot   = st.button("🤖 Random Bot",   use_container_width=True)
+        if st.button("🤖 Random Bot", use_container_width=True) and bots:
+            _apply_profile(random.choice(bots), "bot")
+            st.rerun()
 
-    if gen_human and humans:
-        st.session_state.pop("prefill", None)
-        candidate = random.choice(humans)
-        while str(candidate.get("label", "0")) != "0" and len(humans) > 1:
-            candidate = random.choice(humans)
-        st.session_state["prefill"] = candidate
-        st.session_state["prefill_type"] = "human"
-        st.rerun()
+    ptype = st.session_state.get("prefill_type", "")
+    pname = st.session_state.get("prefill_name", "")
+    if ptype == "human" and pname:
+        st.success(f"✅ Loaded a **Human** account from dataset: @{pname}")
+    elif ptype == "bot" and pname:
+        st.error(f"⚠️ Loaded a **Bot** account from dataset: @{pname}")
 
-    if gen_bot and bots:
-        st.session_state.pop("prefill", None)
-        candidate = random.choice(bots)
-        while str(candidate.get("label", "1")) != "1" and len(bots) > 1:
-            candidate = random.choice(bots)
-        st.session_state["prefill"] = candidate
-        st.session_state["prefill_type"] = "bot"
-        st.rerun()
-
-    prefill = st.session_state.get("prefill", None)
-    if prefill:
-        p            = prefill.get("profile", {})
-        _username    = p.get("screen_name", "")
-        _followers   = int(p.get("followers_count", 0))
-        _following   = int(p.get("friends_count", 0))
-        _tweets      = int(p.get("statuses_count", 0))
-        _verified    = bool(p.get("verified", False))
-        _default_img = bool(p.get("default_profile_image", True))
-        _description = p.get("description", "") or ""
-        _has_url     = bool(p.get("url", ""))
-        _has_location= bool(p.get("location", ""))
-        _created     = datetime(2018, 1, 1)
-        raw_date     = p.get("created_at", "")
-        for fmt in ("%a %b %d %H:%M:%S +0000 %Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
-            try:
-                _created = datetime.strptime(raw_date, fmt); break
-            except (ValueError, TypeError):
-                continue
-        ptype = st.session_state.get("prefill_type", "")
-        if ptype == "human":
-            st.success(f"✅ Loaded a **Human** account from dataset: @{_username}")
-        else:
-            st.error(f"⚠️ Loaded a **Bot** account from dataset: @{_username}")
-    else:
-        _username = "testuser"; _followers = 100; _following = 200
-        _tweets = 500; _verified = False; _default_img = True
-        _description = ""; _has_url = False; _has_location = False
-        _created = datetime(2018, 1, 1)
-
+    # ── Form — widgets read directly from session state via key= ──────────────
     with st.form("account_form"):
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Profile")
-            username     = st.text_input("Username (@handle)", value=_username)
-            followers    = st.number_input("Followers",    min_value=0, value=_followers)
-            following    = st.number_input("Following",    min_value=0, value=_following)
-            tweets       = st.number_input("Total tweets", min_value=0, value=_tweets)
-            created_date = st.date_input("Account created", value=_created)
+            username     = st.text_input("Username (@handle)", key="f_username")
+            followers    = st.number_input("Followers",    min_value=0, key="f_followers")
+            following    = st.number_input("Following",    min_value=0, key="f_following")
+            tweets       = st.number_input("Total tweets", min_value=0, key="f_tweets")
+            created_date = st.date_input("Account created", key="f_created")
         with col2:
             st.subheader("Details")
-            verified     = st.checkbox("Verified account",      value=_verified)
-            default_img  = st.checkbox("Default profile image", value=_default_img)
-            description  = st.text_area("Bio / Description",    value=_description, height=80)
-            has_url      = st.checkbox("Has profile URL",       value=_has_url)
-            has_location = st.checkbox("Has location set",      value=_has_location)
+            verified     = st.checkbox("Verified account",      key="f_verified")
+            default_img  = st.checkbox("Default profile image", key="f_default_img")
+            description  = st.text_area("Bio / Description",    key="f_description", height=80)
+            has_url      = st.checkbox("Has profile URL",       key="f_has_url")
+            has_location = st.checkbox("Has location set",      key="f_has_location")
         submitted = st.form_submit_button("🔍 Analyse Account")
 
     if submitted:
