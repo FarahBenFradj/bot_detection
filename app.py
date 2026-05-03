@@ -13,8 +13,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
+import plotly.express as px
 import os
-
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -68,12 +68,7 @@ MODEL_FILES = {
 }
 
 # ── GitHub Releases — auto-download on Streamlit Cloud ───────────────────────
-# After uploading your model files to a GitHub Release (tag v1.0.0),
-# Streamlit Cloud will automatically download them on first startup.
-# The URLs follow this pattern:
-#   https://github.com/FarahBenFradj/bot_detection/releases/download/v1.0.0/<filename>
 _BASE = "https://github.com/FarahBenFradj/bot_detection/releases/download/v1.0.0"
-
 RELEASE_FILES = {
     "models/bot_detector_transformer_best.keras": f"{_BASE}/bot_detector_transformer_best.keras",
     "models/bot_detector_attention_best.keras":   f"{_BASE}/bot_detector_attention_best.keras",
@@ -81,7 +76,6 @@ RELEASE_FILES = {
     "models/bot_detector_mlp_best.keras":         f"{_BASE}/bot_detector_mlp_best.keras",
     "models/preprocessor.pkl":                    f"{_BASE}/preprocessor.pkl",
 }
-
 
 def _download_file(url: str, dest: Path) -> bool:
     import urllib.request
@@ -94,16 +88,13 @@ def _download_file(url: str, dest: Path) -> bool:
         st.warning(f"⚠️ Could not download {dest.name}: {e}")
         return False
 
-
 def ensure_models():
-    """Download any missing model files from GitHub Releases."""
     missing = [(p, u) for p, u in RELEASE_FILES.items() if not Path(p).exists()]
     if not missing:
         return
     with st.spinner(f"⬇️ Downloading {len(missing)} model file(s) from GitHub Releases…"):
         for path, url in missing:
             _download_file(url, Path(path))
-
 
 # ── Model loading ─────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -112,7 +103,7 @@ def load_assets(model_name: str):
     import keras
     from src.preprocessing import BotDataPreprocessor
 
-    ensure_models()  # ← downloads from GitHub Releases if not on disk
+    ensure_models()
 
     model_path = Path(MODEL_FILES[model_name])
     prep_path  = Path("models/preprocessor.pkl")
@@ -131,16 +122,12 @@ def load_assets(model_name: str):
 
     return model, preprocessor
 
-
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🎯 Settings")
 
-    model_choice = st.selectbox(
-        "Detection Model",
-        list(REAL_METRICS.keys()),
-    )
-    threshold = st.slider("Detection threshold", 0.30, 0.90, 0.50, 0.05)
+    model_choice = st.selectbox("Detection Model", list(REAL_METRICS.keys()))
+    threshold    = st.slider("Detection threshold", 0.30, 0.90, 0.50, 0.05)
 
     model, preprocessor = load_assets(model_choice)
 
@@ -160,7 +147,6 @@ with st.sidebar:
 
     st.info("**Dataset:** Cresci-17\n\n14,368 labelled accounts")
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def build_user_dict(username, followers, following, tweets,
                     created_date, verified, default_img,
@@ -170,47 +156,44 @@ def build_user_dict(username, followers, following, tweets,
     return {
         "ID": username or "form_user",
         "profile": {
-            "screen_name":           username,
-            "name":                  username,
-            "followers_count":       followers,
-            "friends_count":         following,
-            "statuses_count":        tweets,
-            "favourites_count":      0,
-            "listed_count":          0,
-            "verified":              verified,
-            "default_profile":       False,
+            "screen_name":        username,
+            "name":               username,
+            "followers_count":    followers,
+            "friends_count":      following,
+            "statuses_count":     tweets,
+            "favourites_count":   0,
+            "listed_count":       0,
+            "verified":           verified,
+            "default_profile":    False,
             "default_profile_image": default_img,
-            "geo_enabled":           False,
-            "description":           description,
-            "url":                   "http://example.com" if has_url else "",
-            "location":              "somewhere" if has_location else "",
-            "created_at":            datetime(
+            "geo_enabled":        False,
+            "description":        description,
+            "url":                "http://example.com" if has_url else "",
+            "location":           "somewhere" if has_location else "",
+            "created_at":         datetime(
                 created_date.year, created_date.month, created_date.day
             ).strftime("%a %b %d %H:%M:%S +0000 %Y"),
         },
         "tweet": [],
     }
 
-
 def predict_user(user_dict: dict) -> float:
     if model is not None and preprocessor is not None:
         X = preprocessor.transform_single(user_dict)
         return float(model.predict(X, verbose=0).flatten()[0])
-
     # Heuristic fallback (demo mode)
-    p         = user_dict.get("profile", user_dict)
+    p        = user_dict.get("profile", user_dict)
     followers = p.get("followers_count", 0)
     following = p.get("friends_count", 0)
     tweets    = p.get("statuses_count", 0)
     age_days  = max((datetime.now() - datetime(2018, 1, 1)).days, 1)
     score = 0.0
-    if followers / max(following, 1) < 0.1:                         score += 0.30
-    if tweets / max(age_days, 1) > 20:                              score += 0.25
-    if p.get("default_profile_image"):                               score += 0.20
-    if not p.get("description"):                                     score += 0.15
-    if any(c.isdigit() for c in str(p.get("screen_name", ""))):    score += 0.10
+    if followers / max(following, 1) < 0.1:               score += 0.30
+    if tweets / max(age_days, 1) > 20:                    score += 0.25
+    if p.get("default_profile_image"):                    score += 0.20
+    if not p.get("description"):                          score += 0.15
+    if any(c.isdigit() for c in str(p.get("screen_name", ""))): score += 0.10
     return min(score, 0.99)
-
 
 def gauge_chart(probability: float) -> go.Figure:
     fig = go.Figure(go.Indicator(
@@ -233,7 +216,6 @@ def gauge_chart(probability: float) -> go.Figure:
                       paper_bgcolor="rgba(0,0,0,0)")
     return fig
 
-
 # ── Main tabs ─────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs(
     ["🔍 Single Account", "📊 Batch Analysis", "📈 Model Comparison", "📖 About"]
@@ -245,10 +227,9 @@ with tab1:
 
     @st.cache_data
     def load_sample_data():
-        # Priority: full local dataset > committed sample > nothing
         for candidate in [
             "data/cresci17.json",
-            "data/sample_accounts.json",   # small file committed to GitHub
+            "data/sample_accounts.json",
             "data/splits/test.json",
         ]:
             data_path = Path(candidate)
@@ -263,7 +244,7 @@ with tab1:
 
     humans, bots = load_sample_data()
 
-    # ── Seed session state defaults (only on first load) ──────────────────────
+    # ── Session state defaults ────────────────────────────────────────────────
     _DEFAULTS = {
         "f_username": "testuser", "f_followers": 100, "f_following": 200,
         "f_tweets": 500, "f_verified": False, "f_default_img": True,
@@ -275,7 +256,6 @@ with tab1:
             st.session_state[k] = v
 
     def _apply_profile(user: dict, label_type: str):
-        """Write a user profile into session state so the form picks it up."""
         p = user.get("profile", {})
         st.session_state["f_username"]    = p.get("screen_name", "")
         st.session_state["f_followers"]   = int(p.get("followers_count", 0))
@@ -296,44 +276,17 @@ with tab1:
         st.session_state["f_created"] = created
 
     st.markdown("**Quick fill from dataset:**")
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 4])
 
-    def _pick_verified(pool: list, expected_label: str, max_tries: int = 30) -> dict | None:
-        """Pick a random account that the MODEL also classifies correctly.
-        Falls back to any account from the pool after max_tries."""
-        if not pool:
-            return None
-        candidates = pool.copy()
-        random.shuffle(candidates)
-        for candidate in candidates[:max_tries]:
-            if model is not None and preprocessor is not None:
-                try:
-                    X    = preprocessor.transform_single(candidate)
-                    prob = float(model.predict(X, verbose=0).flatten()[0])
-                    predicted = "1" if prob > 0.5 else "0"
-                    if predicted == expected_label:
-                        return candidate
-                except Exception:
-                    pass
-        # fallback: just return a random one from the pool
-        return random.choice(pool)
-
-    with col_btn1:
-        if st.button("👤 Random Human", use_container_width=True):
-            if humans:
-                pick = _pick_verified(humans, "0")
-                _apply_profile(pick, "human")
-                st.rerun()
-            else:
-                st.warning("No sample data found. Commit data/sample_accounts.json to your repo.")
-    with col_btn2:
-        if st.button("🤖 Random Bot", use_container_width=True):
-            if bots:
-                pick = _pick_verified(bots, "1")
-                _apply_profile(pick, "bot")
-                st.rerun()
-            else:
-                st.warning("No sample data found. Commit data/sample_accounts.json to your repo.")
+    # ── Single button: Random Bot/Human ──────────────────────────────────────
+    if st.button("🎲 Random Bot/Human", use_container_width=False):
+        pool = humans + bots
+        if pool:
+            pick = random.choice(pool)
+            label_type = "bot" if str(pick.get("label", "")) == "1" else "human"
+            _apply_profile(pick, label_type)
+            st.rerun()
+        else:
+            st.warning("No sample data found. Commit data/sample_accounts.json to your repo.")
 
     ptype = st.session_state.get("prefill_type", "")
     pname = st.session_state.get("prefill_name", "")
@@ -342,9 +295,10 @@ with tab1:
     elif ptype == "bot" and pname:
         st.error(f"⚠️ Loaded a **Bot** account from dataset: @{pname}")
 
-    # ── Form — widgets read directly from session state via key= ──────────────
+    # ── Form ──────────────────────────────────────────────────────────────────
     with st.form("account_form"):
         col1, col2 = st.columns(2)
+
         with col1:
             st.subheader("Profile")
             username     = st.text_input("Username (@handle)", key="f_username")
@@ -352,13 +306,15 @@ with tab1:
             following    = st.number_input("Following",    min_value=0, key="f_following")
             tweets       = st.number_input("Total tweets", min_value=0, key="f_tweets")
             created_date = st.date_input("Account created", key="f_created")
+
         with col2:
             st.subheader("Details")
-            verified     = st.checkbox("Verified account",      key="f_verified")
-            default_img  = st.checkbox("Default profile image", key="f_default_img")
-            description  = st.text_area("Bio / Description",    key="f_description", height=80)
-            has_url      = st.checkbox("Has profile URL",       key="f_has_url")
-            has_location = st.checkbox("Has location set",      key="f_has_location")
+            verified    = st.checkbox("Verified account",       key="f_verified")
+            default_img = st.checkbox("Default profile image",  key="f_default_img")
+            description = st.text_area("Bio / Description",     key="f_description", height=80)
+            has_url     = st.checkbox("Has profile URL",        key="f_has_url")
+            has_location= st.checkbox("Has location set",       key="f_has_location")
+
         submitted = st.form_submit_button("🔍 Analyse Account")
 
     if submitted:
@@ -372,6 +328,7 @@ with tab1:
 
         st.markdown("---")
         st.subheader("🎯 Detection Result")
+
         r1, r2, r3 = st.columns(3)
 
         with r1:
@@ -398,10 +355,10 @@ with tab1:
             age_d = max((datetime.now() - datetime(
                 created_date.year, created_date.month, created_date.day)).days, 1)
             if followers / max(following, 1) < 0.1: risk.append("Low followers/following ratio")
-            if tweets / age_d > 20:                  risk.append("Very high tweet frequency")
-            if default_img:                           risk.append("Default profile image")
-            if not description:                       risk.append("Empty bio")
-            if any(c.isdigit() for c in username):   risk.append("Digits in username")
+            if tweets / age_d > 20:                 risk.append("Very high tweet frequency")
+            if default_img:                         risk.append("Default profile image")
+            if not description:                     risk.append("Empty bio")
+            if any(c.isdigit() for c in username):  risk.append("Digits in username")
             for r in risk: st.markdown(f"⚠️ {r}")
             if not risk:   st.markdown("✅ No major risk factors")
 
@@ -471,7 +428,7 @@ with tab3:
     st.header("📈 Model Comparison — Cresci-17")
 
     df_metrics = pd.DataFrame(REAL_METRICS).T.reset_index()
-    df_metrics.columns = ["Model", "Accuracy", "F1-Score", "AUC-ROC"]
+    df_metrics.columns = ["Model","Accuracy","F1-Score","AUC-ROC"]
     df_metrics = df_metrics.sort_values("AUC-ROC", ascending=False)
 
     st.dataframe(
@@ -481,7 +438,6 @@ with tab3:
         use_container_width=True, hide_index=True,
     )
 
-    import plotly.express as px
     df_melt = df_metrics.melt(id_vars="Model", var_name="Metric", value_name="Score")
     fig = px.bar(df_melt, x="Metric", y="Score", color="Model", barmode="group",
                  range_y=[0.98, 1.0],
@@ -516,15 +472,13 @@ The system extracts **38 features** per account across 4 categories:
 
 | Model | Accuracy | F1 | AUC |
 |---|---|---|---|
-| Transformer | 99.30% | 0.9954 | 0.9994 |
+| Transformer   | 99.30% | 0.9954 | 0.9994 |
 | Attention MLP | 99.12% | 0.9942 | 0.9993 |
-| Deep MLP | 98.84% | 0.9923 | 0.9988 |
-| MLP Baseline | 98.65% | 0.9911 | 0.9989 |
+| Deep MLP      | 98.84% | 0.9923 | 0.9988 |
+| MLP Baseline  | 98.65% | 0.9911 | 0.9989 |
 
 ## Dataset — Cresci-17
-
-~11,500 labelled Twitter accounts · 8 bot categories · Publicly available.  
-Source: Indiana University Bot Repository
+~11,500 labelled Twitter accounts · 8 bot categories · Publicly available.
 
 ## References
 - Cresci et al. (2017). *The Paradigm-Shift of Social Spambots.* WWW 2017.
