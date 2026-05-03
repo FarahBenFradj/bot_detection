@@ -109,7 +109,7 @@ def ensure_models():
 @st.cache_resource
 def load_assets(model_name: str):
     import sys; sys.path.insert(0, ".")
-    from tensorflow import keras
+    import keras
     from src.preprocessing import BotDataPreprocessor
 
     ensure_models()  # ← downloads from GitHub Releases if not on disk
