@@ -245,16 +245,21 @@ with tab1:
 
     @st.cache_data
     def load_sample_data():
-        data_path = Path("data/cresci17.json")
-        if not data_path.exists():
-            data_path = Path("data/splits/test.json")
-        if not data_path.exists():
-            return [], []
-        with open(data_path, encoding="utf-8") as f:
-            data = json.load(f)
-        humans = [u for u in data if str(u.get("label", "")) == "0"]
-        bots   = [u for u in data if str(u.get("label", "")) == "1"]
-        return humans, bots
+        # Priority: full local dataset > committed sample > nothing
+        for candidate in [
+            "data/cresci17.json",
+            "data/sample_accounts.json",   # small file committed to GitHub
+            "data/splits/test.json",
+        ]:
+            data_path = Path(candidate)
+            if data_path.exists():
+                with open(data_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                humans = [u for u in data if str(u.get("label", "")) == "0"]
+                bots   = [u for u in data if str(u.get("label", "")) == "1"]
+                if humans and bots:
+                    return humans, bots
+        return [], []
 
     humans, bots = load_sample_data()
 
