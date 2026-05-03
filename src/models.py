@@ -215,7 +215,7 @@ class BotDetectionModels:
                 verbose=1,
             ),
             ModelCheckpoint(
-                f"models/{model_name}_best.h5",
+                f"models/{model_name}_best.keras",
                 monitor="val_auc",
                 save_best_only=True,
                 mode="max",
