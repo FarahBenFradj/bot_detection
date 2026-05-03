@@ -12,9 +12,7 @@ venv/
 data/
 
 # Models (VERY IMPORTANT)
-models/
-*.h5
-*.pkl
+
 
 # Results / outputs
 results/
