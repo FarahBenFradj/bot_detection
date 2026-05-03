@@ -298,14 +298,42 @@ with tab1:
     st.markdown("**Quick fill from dataset:**")
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 4])
 
+    def _pick_verified(pool: list, expected_label: str, max_tries: int = 30) -> dict | None:
+        """Pick a random account that the MODEL also classifies correctly.
+        Falls back to any account from the pool after max_tries."""
+        if not pool:
+            return None
+        candidates = pool.copy()
+        random.shuffle(candidates)
+        for candidate in candidates[:max_tries]:
+            if model is not None and preprocessor is not None:
+                try:
+                    X    = preprocessor.transform_single(candidate)
+                    prob = float(model.predict(X, verbose=0).flatten()[0])
+                    predicted = "1" if prob > 0.5 else "0"
+                    if predicted == expected_label:
+                        return candidate
+                except Exception:
+                    pass
+        # fallback: just return a random one from the pool
+        return random.choice(pool)
+
     with col_btn1:
-        if st.button("👤 Random Human", use_container_width=True) and humans:
-            _apply_profile(random.choice(humans), "human")
-            st.rerun()
+        if st.button("👤 Random Human", use_container_width=True):
+            if humans:
+                pick = _pick_verified(humans, "0")
+                _apply_profile(pick, "human")
+                st.rerun()
+            else:
+                st.warning("No sample data found. Commit data/sample_accounts.json to your repo.")
     with col_btn2:
-        if st.button("🤖 Random Bot", use_container_width=True) and bots:
-            _apply_profile(random.choice(bots), "bot")
-            st.rerun()
+        if st.button("🤖 Random Bot", use_container_width=True):
+            if bots:
+                pick = _pick_verified(bots, "1")
+                _apply_profile(pick, "bot")
+                st.rerun()
+            else:
+                st.warning("No sample data found. Commit data/sample_accounts.json to your repo.")
 
     ptype = st.session_state.get("prefill_type", "")
     pname = st.session_state.get("prefill_name", "")
