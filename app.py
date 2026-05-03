@@ -13,6 +13,10 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
+import os
+
+if not os.path.exists("models/model.pkl"):
+    raise FileNotFoundError("Model not found — Git LFS not pulled correctly")
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
